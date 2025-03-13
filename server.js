@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // MongoDB Connection
 mongoose.connect('mongodb+srv://ikramlechqer:ikramlechqer@cluster0.owgf0.mongodb.net/medishare?retryWrites=true&w=majority&appName=Cluster0')
@@ -79,14 +79,19 @@ app.post('/api/equipment', upload.single('image'), async (req, res) => {
   try {
     const equipmentData = {
       ...req.body,
-      price: Number(req.body.price),
-      image: req.file ? `/uploads/${req.file.filename}` : null
+      price: Number(req.body.price)
     };
+    
+    // Handle image upload
+    if (req.file) {
+      equipmentData.image = `/uploads/${req.file.filename}`;
+    }
     
     const newEquipment = new Equipment(equipmentData);
     const savedEquipment = await newEquipment.save();
     res.status(201).json(savedEquipment);
   } catch (err) {
+    console.error('Error saving equipment:', err);
     res.status(400).json({ message: err.message });
   }
 });
@@ -112,6 +117,7 @@ app.put('/api/equipment/:id', upload.single('image'), async (req, res) => {
       price: Number(req.body.price)
     };
     
+    // Only update image if a new one is uploaded
     if (req.file) {
       equipmentData.image = `/uploads/${req.file.filename}`;
       
@@ -142,31 +148,29 @@ app.put('/api/equipment/:id', upload.single('image'), async (req, res) => {
 });
 
 // Delete equipment
-// Delete equipment
 app.delete('/api/equipment/:id', async (req, res) => {
-    try {
-      const equipment = await Equipment.findById(req.params.id);
-      
-      if (!equipment) {
-        return res.status(404).json({ message: 'Equipment not found' });
-      }
-      
-      // Delete associated image
-      if (equipment.image) {
-        const imagePath = path.join(__dirname, equipment.image);
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
-        }
-      }
-      
-      // Use findByIdAndDelete instead of remove()
-      await Equipment.findByIdAndDelete(req.params.id);
-      res.json({ message: 'Equipment deleted' });
-    } catch (err) {
-      res.status(500).json({ message: err.message });
+  try {
+    const equipment = await Equipment.findById(req.params.id);
+    
+    if (!equipment) {
+      return res.status(404).json({ message: 'Equipment not found' });
     }
-  });
-  
+    
+    // Delete associated image
+    if (equipment.image) {
+      const imagePath = path.join(__dirname, equipment.image);
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
+    }
+    
+    await Equipment.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Equipment deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Get dashboard stats
 app.get('/api/stats', async (req, res) => {
   try {
