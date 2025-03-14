@@ -14,7 +14,7 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // MongoDB Connection
-mongoose.connect('mongodb+srv://ikramlechqer:ikramlechqer@cluster0.owgf0.mongodb.net/medishare?retryWrites=true&w=majority&appName=Cluster0')
+mongoose.connect('mongodb+srv://ikramlechqer:ikramlechqer@cluster0.owgf0.mongodb.net/Medical-Equipment?retryWrites=true&w=majority&appName=Cluster0')
   .then(() => console.log('MongoDB Connected'))
   .catch(err => console.error('MongoDB Connection Error:', err));
 
