@@ -7,15 +7,15 @@ const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+require('dotenv').config();
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
-// Environment variables (in production, these should be set in the environment)
 // In a real production app, use dotenv to load from .env file
-const JWT_SECRET = process.env.JWT_SECRET || 'medishare-secret-key-2025';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ikramlechqer:ikramlechqer@cluster0.owgf0.mongodb.net/Medical-Equipment?retryWrites=true&w=majority&appName=Cluster0';
+const JWT_SECRET = process.env.JWT_SECRET;
+const MONGODB_URI = process.env.MONGODB_URI;
 
 // Middleware
 app.use(cors());
