@@ -18,7 +18,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  exposedHeaders: ['x-auth-token']
+}));
 app.use(express.json());
 
 // Create uploads directory if it doesn't exist
@@ -86,21 +90,40 @@ const validateSignup = [
 
 // Authentication middleware
 const auth = (req, res, next) => {
-  // Get token from header
-  const token = req.header('x-auth-token');
-  
-  // Check if no token
-  if (!token) {
-    return res.status(401).json({ message: 'Pas de token, autorisation refusée' });
-  }
-  
-  // Verify token
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded.user;
-    next();
+    // Get token from different possible locations
+    const token = 
+      req.header('x-auth-token') || 
+      req.header('Authorization')?.replace('Bearer ', '') ||
+      req.query.token;
+    
+    // Check if no token
+    if (!token) {
+      console.log('No token provided');
+      return res.status(401).json({ 
+        success: false,
+        message: 'Authentification requise. Veuillez vous connecter.' 
+      });
+    }
+    
+    // Verify token
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded.user;
+      next();
+    } catch (err) {
+      console.log('Invalid token:', err.message);
+      res.status(401).json({ 
+        success: false,
+        message: 'Session invalide ou expirée. Veuillez vous reconnecter.' 
+      });
+    }
   } catch (err) {
-    res.status(401).json({ message: 'Token invalide' });
+    console.error('Auth middleware error:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Erreur d\'authentification' 
+    });
   }
 };
 
@@ -147,7 +170,7 @@ const registerUser = async (req, res) => {
     jwt.sign(
       payload,
       JWT_SECRET,
-      { expiresIn: '7d' }, // Token expires in 7 days
+      { expiresIn: '1h' }, 
       (err, token) => {
         if (err) throw err;
         
@@ -186,7 +209,10 @@ app.post('/api/login', [
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ 
+        success: false,
+        errors: errors.array() 
+      });
     }
 
     const { email, password } = req.body;
@@ -194,13 +220,19 @@ app.post('/api/login', [
     // Check if user exists
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ message: 'Email ou mot de passe incorrect' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email ou mot de passe incorrect' 
+      });
     }
 
     // Compare passwords
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: 'Email ou mot de passe incorrect' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email ou mot de passe incorrect' 
+      });
     }
 
     // Create JWT payload
@@ -214,7 +246,7 @@ app.post('/api/login', [
     jwt.sign(
       payload,
       JWT_SECRET,
-      { expiresIn: '7d' },
+      { expiresIn: '24h' }, 
       (err, token) => {
         if (err) throw err;
         
@@ -227,6 +259,7 @@ app.post('/api/login', [
         };
         
         res.json({ 
+          success: true,
           message: 'Connexion réussie',
           token, 
           user: userToReturn 
@@ -236,7 +269,11 @@ app.post('/api/login', [
 
   } catch (error) {
     console.error('Server error:', error);
-    res.status(500).json({ message: 'Erreur du serveur lors de la connexion' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Erreur du serveur lors de la connexion',
+      error: error.message 
+    });
   }
 });
 
@@ -323,29 +360,46 @@ const equipmentSchema = new mongoose.Schema({
   location: { type: String, required: true },
   image: { type: String },
   status: { type: String, enum: ['active', 'pending'], default: 'active' },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 });
 
 const Equipment = mongoose.model('Equipment', equipmentSchema);
 
 // Routes
 // Get all equipment
-app.get('/api/equipment', async (req, res) => {
+app.get('/api/equipment', auth, async (req, res) => {
   try {
-    const equipment = await Equipment.find().sort({ createdAt: -1 });
-    res.json(equipment);
+    const equipment = await Equipment.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    
+    if (!equipment) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Aucun équipement trouvé' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: equipment
+    });
   } catch (err) {
     console.error('Error fetching equipment:', err);
-    res.status(500).json({ message: 'Erreur lors de la récupération des équipements' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Erreur lors de la récupération des équipements',
+      error: err.message 
+    });
   }
 });
 
 // Add new equipment
-app.post('/api/equipment', upload.single('image'), handleMulterError, async (req, res) => {
+app.post('/api/equipment', auth, upload.single('image'), handleMulterError, async (req, res) => {
   try {
     const equipmentData = {
       ...req.body,
-      price: Number(req.body.price)
+      price: Number(req.body.price),
+      userId: req.user.id
     };
     
     // Handle image upload
@@ -355,24 +409,41 @@ app.post('/api/equipment', upload.single('image'), handleMulterError, async (req
     
     const newEquipment = new Equipment(equipmentData);
     const savedEquipment = await newEquipment.save();
-    res.status(201).json(savedEquipment);
+    res.status(201).json({
+      success: true,
+      data: savedEquipment
+    });
   } catch (err) {
     console.error('Error saving equipment:', err);
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ 
+      success: false,
+      message: 'Erreur lors de la création de l\'équipement',
+      error: err.message 
+    });
   }
 });
 
 // Get equipment by ID
-app.get('/api/equipment/:id', async (req, res) => {
+app.get('/api/equipment/:id', auth, async (req, res) => {
   try {
-    const equipment = await Equipment.findById(req.params.id);
+    const equipment = await Equipment.findOne({ _id: req.params.id, userId: req.user.id });
     if (!equipment) {
-      return res.status(404).json({ message: 'Équipement non trouvé' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Équipement non trouvé' 
+      });
     }
-    res.json(equipment);
+    res.json({
+      success: true,
+      data: equipment
+    });
   } catch (err) {
     console.error('Error fetching equipment:', err);
-    res.status(500).json({ message: 'Erreur lors de la récupération de l\'équipement' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Erreur lors de la récupération de l\'équipement',
+      error: err.message 
+    });
   }
 });
 
@@ -389,7 +460,7 @@ const deleteFile = (filePath) => {
 };
 
 // Update equipment
-app.put('/api/equipment/:id', upload.single('image'), handleMulterError, async (req, res) => {
+app.put('/api/equipment/:id', auth, upload.single('image'), handleMulterError, async (req, res) => {
   try {
     const equipmentData = {
       ...req.body,
@@ -401,85 +472,120 @@ app.put('/api/equipment/:id', upload.single('image'), handleMulterError, async (
       equipmentData.image = `/uploads/${req.file.filename}`;
       
       // Delete old image if it exists
-      const oldEquipment = await Equipment.findById(req.params.id);
-      if (oldEquipment && oldEquipment.image) {
+      const oldEquipment = await Equipment.findOne({ _id: req.params.id, userId: req.user.id });
+      if (!oldEquipment) {
+        return res.status(404).json({ 
+          success: false,
+          message: 'Équipement non trouvé' 
+        });
+      }
+      
+      if (oldEquipment.image) {
         deleteFile(oldEquipment.image);
       }
     }
     
-    const updatedEquipment = await Equipment.findByIdAndUpdate(
-      req.params.id, 
+    const updatedEquipment = await Equipment.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
       equipmentData, 
       { new: true, runValidators: true }
     );
     
     if (!updatedEquipment) {
-      return res.status(404).json({ message: 'Équipement non trouvé' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Équipement non trouvé' 
+      });
     }
     
-    res.json(updatedEquipment);
+    res.json({
+      success: true,
+      data: updatedEquipment
+    });
   } catch (err) {
     console.error('Error updating equipment:', err);
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ 
+      success: false,
+      message: 'Erreur lors de la mise à jour de l\'équipement',
+      error: err.message 
+    });
   }
 });
 
 // Delete equipment
-app.delete('/api/equipment/:id', async (req, res) => {
+app.delete('/api/equipment/:id', auth, async (req, res) => {
   try {
-    const equipment = await Equipment.findById(req.params.id);
+    const equipment = await Equipment.findOne({ _id: req.params.id, userId: req.user.id });
     
     if (!equipment) {
-      return res.status(404).json({ message: 'Équipement non trouvé' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Équipement non trouvé' 
+      });
     }
     
-  // Delete associated image
-  if (equipment.image) {
-    deleteFile(equipment.image);
+    // Delete associated image
+    if (equipment.image) {
+      deleteFile(equipment.image);
+    }
+    
+    await Equipment.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    res.json({ 
+      success: true,
+      message: 'Équipement supprimé avec succès' 
+    });
+  } catch (err) {
+    console.error('Error deleting equipment:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Erreur lors de la suppression de l\'équipement',
+      error: err.message 
+    });
   }
-  
-  await Equipment.findByIdAndDelete(req.params.id);
-  res.json({ message: 'Équipement supprimé' });
-} catch (err) {
-  console.error('Error deleting equipment:', err);
-  res.status(500).json({ message: 'Erreur lors de la suppression de l\'équipement' });
-}
 });
 
 // Get dashboard stats
-app.get('/api/stats', async (req, res) => {
-try {
-  const totalEquipment = await Equipment.countDocuments();
-  const active = await Equipment.countDocuments({ status: 'active' });
-  const pending = await Equipment.countDocuments({ status: 'pending' });
-  const revenue = await Equipment.aggregate([
-    { $group: { _id: null, total: { $sum: "$price" } } }
-  ]);
-  
-  res.json({
-    totalEquipment,
-    active,
-    pending,
-    revenue: revenue.length > 0 ? revenue[0].total : 0
-  });
-} catch (err) {
-  console.error('Error fetching stats:', err);
-  res.status(500).json({ message: 'Erreur lors de la récupération des statistiques' });
-}
+app.get('/api/stats', auth, async (req, res) => {
+  try {
+    const totalEquipment = await Equipment.countDocuments({ userId: req.user.id });
+    const active = await Equipment.countDocuments({ userId: req.user.id, status: 'active' });
+    const pending = await Equipment.countDocuments({ userId: req.user.id, status: 'pending' });
+    const revenue = await Equipment.aggregate([
+      { $match: { userId: req.user.id } },
+      { $group: { _id: null, total: { $sum: "$price" } } }
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        totalEquipment,
+        active,
+        pending,
+        revenue: revenue.length > 0 ? revenue[0].total : 0
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching stats:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Erreur lors de la récupération des statistiques',
+      error: err.message 
+    });
+  }
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-console.error('Unhandled error:', err);
-res.status(500).json({ message: 'Erreur interne du serveur' });
+  console.error('Unhandled error:', err);
+  res.status(500).json({ message: 'Erreur interne du serveur' });
 });
 
 // Handle 404 - Route not found
 app.use((req, res) => {
-res.status(404).json({ message: 'Route non trouvée' });
+  res.status(404).json({ message: 'Route non trouvée' });
 });
 
 // Start server
 app.listen(PORT, () => {
-console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
