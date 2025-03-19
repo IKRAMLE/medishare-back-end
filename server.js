@@ -200,6 +200,23 @@ const registerUser = async (req, res) => {
 app.post('/api/signup', validateSignup, registerUser);
 app.post('/api/users/register', validateSignup, registerUser);
 
+// get use membership date by id
+app.get('/api/users/register/:userId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json({
+      id: user._id,
+      email: user.email,
+      createdAt: user.createdAt
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Login endpoint
 app.post('/api/login', [
   body('email').isEmail().withMessage('Veuillez fournir un email valide'),
