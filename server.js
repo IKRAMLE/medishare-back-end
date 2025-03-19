@@ -385,11 +385,13 @@ const Equipment = mongoose.model('Equipment', equipmentSchema);
 
 // Routes
 // Get all equipment
-app.get('/api/equipment', auth, async (req, res) => {
+// Get all equipment - public version
+app.get('/api/equipment', async (req, res) => {
   try {
-    const equipment = await Equipment.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    // Since we're not checking user ID, we'll return all equipment
+    const equipment = await Equipment.find().sort({ createdAt: -1 });
     
-    if (!equipment) {
+    if (!equipment || equipment.length === 0) {
       return res.status(404).json({ 
         success: false,
         message: 'Aucun équipement trouvé' 
@@ -405,6 +407,33 @@ app.get('/api/equipment', auth, async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: 'Erreur lors de la récupération des équipements',
+      error: err.message 
+    });
+  }
+});
+
+// Get equipment by ID - public version
+app.get('/api/equipment/:id', async (req, res) => {
+  try {
+    // No longer filtering by userId
+    const equipment = await Equipment.findById(req.params.id);
+    
+    if (!equipment) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Équipement non trouvé' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: equipment
+    });
+  } catch (err) {
+    console.error('Error fetching equipment:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Erreur lors de la récupération de l\'équipement',
       error: err.message 
     });
   }
@@ -440,29 +469,7 @@ app.post('/api/equipment', auth, upload.single('image'), handleMulterError, asyn
   }
 });
 
-// Get equipment by ID
-app.get('/api/equipment/:id', auth, async (req, res) => {
-  try {
-    const equipment = await Equipment.findOne({ _id: req.params.id, userId: req.user.id });
-    if (!equipment) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Équipement non trouvé' 
-      });
-    }
-    res.json({
-      success: true,
-      data: equipment
-    });
-  } catch (err) {
-    console.error('Error fetching equipment:', err);
-    res.status(500).json({ 
-      success: false,
-      message: 'Erreur lors de la récupération de l\'équipement',
-      error: err.message 
-    });
-  }
-});
+
 
 // Helper function to delete file
 const deleteFile = (filePath) => {
