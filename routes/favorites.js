@@ -13,7 +13,11 @@ router.get('/favorites', auth, async (req, res) => {
     
     res.json({
       success: true,
+<<<<<<< HEAD
       data: favorites.filter(fav => fav.equipment !== null) 
+=======
+      data: favorites.filter(fav => fav.equipment !== null) // Filter out any null equipment
+>>>>>>> 64ef0610b4baaba76fde9a45c0cba58bdfd05163
     });
   } catch (error) {
     console.error('Error fetching favorites:', error);
