@@ -12,6 +12,8 @@ const userRoutes = require('./routes/user');
 const favoriteRoutes = require('./routes/favorites');
 const orderRoutes = require('./routes/orders');
 const chatRoutes = require('./routes/chat');
+const dashboardRoutes = require('./routes/dashboard');
+const settingsRoutes = require('./routes/settings');
 
 // Initialize Express app
 const app = express();
@@ -47,6 +49,8 @@ app.use('/api', userRoutes);
 app.use('/api', favoriteRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', chatRoutes);
+app.use('/api', dashboardRoutes);
+app.use('/api', settingsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
