@@ -126,7 +126,8 @@ exports.loginUser = async (req, res) => {
           id: user._id,
           fullName: user.fullName,
           email: user.email,
-          phone: user.phone
+          phone: user.phone,
+          role: user.role
         };
         
         res.json({ 
