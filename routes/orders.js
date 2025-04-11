@@ -19,8 +19,8 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Create new order
-router.post('/orders', auth, upload.single('receipt'), orderController.createOrder);
+// Create new order - no auth required
+router.post('/orders', upload.single('receipt'), orderController.createOrder);
 
 // Get user's orders
 router.get('/orders', auth, orderController.getUserOrders);

@@ -7,8 +7,7 @@ exports.createOrder = async (req, res) => {
   try {
     // Parse the orderData from the request body
     const orderData = JSON.parse(req.body.orderData);
-    const { items, paymentMethod, totalAmount, personalInfo } = orderData;
-    const userId = req.user.id;
+    const { items, paymentMethod, totalAmount, personalInfo, deposit } = orderData;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -23,10 +22,16 @@ exports.createOrder = async (req, res) => {
 
     for (const item of items) {
       const equipment = await Equipment.findById(item.equipmentId);
-      if (!equipment || equipment.availability !== 'available') {
+      if (!equipment) {
         return res.status(400).json({
           success: false,
-          message: 'Un ou plusieurs équipements ne sont plus disponibles'
+          message: `Équipement non trouvé: ${item.equipmentId}`
+        });
+      }
+      if (equipment.availability !== 'available') {
+        return res.status(400).json({
+          success: false,
+          message: `L'équipement ${equipment.name} n'est plus disponible`
         });
       }
       equipmentOwners.add(equipment.userId.toString());
@@ -49,11 +54,17 @@ exports.createOrder = async (req, res) => {
 
       // Create order
       const order = new Order({
-        userId,
         ownerId,
-        items: ownerItems,
+        items: ownerItems.map(item => ({
+          equipmentId: item.equipmentId,
+          quantity: item.quantity,
+          rentalDays: item.rentalDays,
+          price: item.price,
+          rentalPeriod: item.rentalPeriod
+        })),
         paymentMethod,
         totalAmount: ownerTotal,
+        deposit: ownerTotal * 0.7, // 70% deposit
         personalInfo,
         status: 'pending',
         paymentProof: req.file ? `/uploads/${req.file.filename}` : undefined
