@@ -1,147 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const Order = require('../models/Order');
-const Equipment = require('../models/Equipment');
-const User = require('../models/User');
+const orderController = require('../controllers/orderController');
+const multer = require('multer');
+const path = require('path');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads');
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage: storage });
 
 // Create new order
-router.post('/orders', auth, async (req, res) => {
-  try {
-    const { items, paymentMethod, totalAmount } = req.body;
-
-    // Validate items availability
-    for (const item of items) {
-      const equipment = await Equipment.findById(item.equipmentId);
-      if (!equipment || equipment.availability !== 'available') {
-        return res.status(400).json({
-          success: false,
-          message: 'Un ou plusieurs équipements ne sont plus disponibles'
-        });
-      }
-    }
-
-    // Create order
-    const order = new Order({
-      userId: req.user.id,
-      items,
-      paymentMethod,
-      totalAmount
-    });
-
-    await order.save();
-
-    // Update equipment availability
-    for (const item of items) {
-      await Equipment.findByIdAndUpdate(item.equipmentId, {
-        availability: 'rented'
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'Commande créée avec succès',
-      data: order
-    });
-  } catch (err) {
-    console.error('Error creating order:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la création de la commande',
-      error: err.message
-    });
-  }
-});
+router.post('/orders', auth, upload.single('receipt'), orderController.createOrder);
 
 // Get user's orders
-router.get('/orders', auth, async (req, res) => {
-  try {
-    const orders = await Order.find({ userId: req.user.id })
-      .populate('items.equipmentId')
-      .sort('-createdAt');
+router.get('/orders', auth, orderController.getUserOrders);
 
-    res.json({
-      success: true,
-      data: orders
-    });
-  } catch (err) {
-    console.error('Error fetching orders:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la récupération des commandes',
-      error: err.message
-    });
-  }
-});
+// Get owner's orders
+router.get('/orders/owner', auth, orderController.getOwnerOrders);
 
-// Get order details
-router.get('/orders/:orderId', auth, async (req, res) => {
-  try {
-    const order = await Order.findOne({
-      _id: req.params.orderId,
-      userId: req.user.id
-    }).populate('items.equipmentId');
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Commande non trouvée'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: order
-    });
-  } catch (err) {
-    console.error('Error fetching order:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la récupération de la commande',
-      error: err.message
-    });
-  }
-});
-
-// Cancel order
-router.post('/orders/:orderId/cancel', auth, async (req, res) => {
-  try {
-    const order = await Order.findOne({
-      _id: req.params.orderId,
-      userId: req.user.id,
-      status: 'pending'
-    });
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Commande non trouvée ou ne peut pas être annulée'
-      });
-    }
-
-    order.status = 'cancelled';
-    await order.save();
-
-    // Restore equipment availability
-    for (const item of order.items) {
-      await Equipment.findByIdAndUpdate(item.equipmentId, {
-        availability: 'available'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Commande annulée avec succès',
-      data: order
-    });
-  } catch (err) {
-    console.error('Error cancelling order:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de l\'annulation de la commande',
-      error: err.message
-    });
-  }
-});
+// Update order status
+router.put('/orders/:orderId/status', auth, orderController.updateOrderStatus);
 
 module.exports = router;
