@@ -15,6 +15,7 @@ const orderRoutes = require('./routes/orders');
 const chatRoutes = require('./routes/chat');
 const dashboardRoutes = require('./routes/dashboard');
 const settingsRoutes = require('./routes/settings');
+const newsletterRoutes = require('./routes/newsletterRoutes');
 
 // Initialize Express app
 const app = express();
@@ -69,6 +70,7 @@ app.use('/api', orderRoutes);
 app.use('/api', chatRoutes);
 app.use('/api', dashboardRoutes);
 app.use('/api', settingsRoutes);
+app.use('/api/newsletter', newsletterRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
