@@ -173,20 +173,21 @@ const getRecentActivity = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(3)
       .populate('userId', 'name email')
-      .populate('items.equipmentId', 'name');
+      .populate('items.equipmentId', 'name')
+      .lean();  // Convertir en objet JavaScript simple
 
     // Get equipment alerts (low stock or maintenance needed)
     const equipmentAlerts = await Equipment.find({
       $or: [
-        { stock: { $lt: 5 } },
+        { quantity: { $lt: 5 } },
         { maintenanceStatus: 'needed' }
       ]
     })
     .sort({ updatedAt: -1 })
     .limit(3)
-    .select('name stock maintenanceStatus updatedAt');
+    .select('name quantity maintenanceStatus updatedAt');
 
-    // Format activities
+    // Format activities with error handling
     const activities = [
       ...recentUsers.map(user => ({
         id: user._id,
@@ -200,24 +201,31 @@ const getRecentActivity = async (req, res) => {
         id: order._id,
         type: 'equipment',
         action: 'Equipment rented',
-        user: order.userId.name,
-        equipment: order.items.map(item => item.equipmentId.name).join(', '),
+        user: order.userId?.name || 'Unknown User',
+        equipment: order.items?.map(item => item.equipmentId?.name || 'Unknown Equipment').join(', ') || 'No equipment',
         time: order.createdAt,
         status: 'success'
       })),
       ...equipmentAlerts.map(equipment => ({
         id: equipment._id,
         type: 'alert',
-        action: equipment.stock < 5 ? 'Low stock alert' : 'Maintenance needed',
+        action: equipment.quantity < 5 ? 'Low stock alert' : 'Maintenance needed',
         equipment: equipment.name,
         time: equipment.updatedAt,
         status: 'warning'
       }))
     ];
 
-    // Sort by time and limit to 10 most recent
+    // Sort by time with error handling
     const sortedActivities = activities
-      .sort((a, b) => new Date(b.time) - new Date(a.time))
+      .sort((a, b) => {
+        try {
+          return new Date(b.time || 0) - new Date(a.time || 0);
+        } catch (error) {
+          console.error('Error sorting activities:', error);
+          return 0;
+        }
+      })
       .slice(0, 10);
 
     res.json({

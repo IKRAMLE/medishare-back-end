@@ -57,9 +57,19 @@ if (!fs.existsSync(uploadDir)) {
 app.use('/uploads', express.static(uploadDir));
 
 // MongoDB Connection
-mongoose.connect(MONGODB_URI)
+mongoose.connect(MONGODB_URI, {
+  serverSelectionTimeoutMS: 30000, // Timeout après 30 secondes
+  socketTimeoutMS: 45000, // Timeout du socket après 45 secondes
+  connectTimeoutMS: 30000, // Timeout de connexion après 30 secondes
+  retryWrites: true,
+  retryReads: true,
+  maxPoolSize: 10
+})
 .then(() => console.log('Connected to MongoDB Atlas'))
-.catch(err => console.error('Error connecting to MongoDB:', err));
+.catch(err => {
+  console.error('Error connecting to MongoDB:', err);
+  process.exit(1); // Arrêter le serveur si la connexion échoue
+});
 
 // Routes
 app.use('/api', authRoutes);
