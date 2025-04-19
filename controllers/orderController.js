@@ -59,6 +59,8 @@ exports.createOrder = async (req, res) => {
           equipmentId: item.equipmentId,
           quantity: item.quantity,
           rentalDays: item.rentalDays,
+          startDate: item.startDate,
+          endDate: item.endDate,
           price: item.price,
           rentalPeriod: item.rentalPeriod
         })),

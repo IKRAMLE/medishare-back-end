@@ -16,6 +16,14 @@ const orderItemSchema = new mongoose.Schema({
     required: true,
     min: 1
   },
+  startDate: {
+    type: Date,
+    required: true
+  },
+  endDate: {
+    type: Date,
+    required: true
+  },
   price: {
     type: Number,
     required: true
