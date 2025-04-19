@@ -58,16 +58,18 @@ exports.createOrder = async (req, res) => {
         items: ownerItems.map(item => ({
           equipmentId: item.equipmentId,
           quantity: item.quantity,
-          rentalDays: item.rentalDays,
+          rentalDays: item.rentalDays || 30,
           price: item.price,
-          rentalPeriod: item.rentalPeriod
+          rentalPeriod: 'month'
         })),
         paymentMethod,
         totalAmount: ownerTotal,
         deposit: ownerTotal * 0.7, // 70% deposit
         personalInfo,
         status: 'pending',
-        paymentProof: req.file ? `/uploads/${req.file.filename}` : undefined
+        paymentProof: req.files?.receipt ? `/uploads/${req.files.receipt[0].filename}` : undefined,
+        cinProof: req.files?.cinFile ? `/uploads/${req.files.cinFile[0].filename}` : undefined,
+        messageFile: req.files?.messageFile ? `/uploads/${req.files.messageFile[0].filename}` : undefined
       });
 
       await order.save();
@@ -158,12 +160,22 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
-    order.status = status;
-    await order.save();
+    // Préserver les valeurs existantes des items
+    const updatedOrder = {
+      ...order.toObject(),
+      status: status
+    };
+
+    // Mettre à jour l'ordre avec les valeurs préservées
+    const result = await Order.findByIdAndUpdate(
+      orderId,
+      updatedOrder,
+      { new: true, runValidators: true }
+    );
 
     // If order is rejected, restore equipment availability
     if (status === 'rejected') {
-      for (const item of order.items) {
+      for (const item of result.items) {
         await Equipment.findByIdAndUpdate(item.equipmentId, {
           availability: 'available'
         });
@@ -173,7 +185,7 @@ exports.updateOrderStatus = async (req, res) => {
     res.json({
       success: true,
       message: 'Statut de la commande mis à jour avec succès',
-      data: order
+      data: result
     });
   } catch (err) {
     console.error('Error updating order status:', err);

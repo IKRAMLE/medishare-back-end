@@ -17,10 +17,24 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: function(req, file, cb) {
+    // Accept images and PDFs
+    if (!file.originalname.match(/\.(jpg|jpeg|png|gif|pdf)$/i)) {
+      return cb(new Error('Only image and PDF files are allowed!'), false);
+    }
+    cb(null, true);
+  }
+});
 
 // Create new order - no auth required
-router.post('/orders', upload.single('receipt'), orderController.createOrder);
+router.post('/orders', upload.fields([
+  { name: 'receipt', maxCount: 1 },
+  { name: 'cinFile', maxCount: 1 },
+  { name: 'messageFile', maxCount: 1 }
+]), orderController.createOrder);
 
 // Get user's orders
 router.get('/orders', auth, orderController.getUserOrders);

@@ -74,13 +74,7 @@ const orderSchema = new mongoose.Schema({
   paymentMethod: {
     type: String,
     required: true,
-    enum: ['bank', 'wafacash', 'cashplus']
-  },
-  paymentProof: {
-    type: String,
-    required: function() {
-      return ['bank', 'wafacash', 'cashplus'].includes(this.paymentMethod);
-    }
+    enum: ['cash', 'card', 'transfer', 'bank', 'wafacash', 'cashplus']
   },
   totalAmount: {
     type: Number,
@@ -93,8 +87,17 @@ const orderSchema = new mongoose.Schema({
   status: {
     type: String,
     required: true,
-    enum: ['pending', 'approved', 'rejected', 'completed'],
+    enum: ['pending', 'approved', 'rejected', 'completed', 'cancelled'],
     default: 'pending'
+  },
+  paymentProof: {
+    type: String
+  },
+  cinProof: {
+    type: String
+  },
+  messageFile: {
+    type: String
   },
   createdAt: {
     type: Date,
